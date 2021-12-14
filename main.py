@@ -54,6 +54,7 @@ def run(config):
                                            pi_lr=config.pi_lr,
                                            q_lr=config.q_lr,
                                            gamma=config.gamma,
+                                           uniform=config.uniform,  # set 1
                                            pol_hidden_dim=config.pol_hidden_dim,
                                            critic_hidden_dim=config.critic_hidden_dim,
                                            attend_heads=config.attend_heads,
@@ -167,6 +168,7 @@ if __name__ == '__main__':
     parser.add_argument("model_name",
                         help="Name of directory to store " +
                              "model/training contents")   # algo_name
+    parser.add_argument("--uniform", default=1, type=int)
     parser.add_argument("--n_rollout_threads", default=12, type=int)
     parser.add_argument("--buffer_length", default=int(1e6), type=int)
     parser.add_argument("--n_episodes", default=50000, type=int)

@@ -260,7 +260,8 @@ class Critic(nn.Module):
             self.state_encoders.append(state_encoder)
 
 
-    def forward(self, inps, act=None, agents=None, return_softmax_act=False, return_q=False, return_max_q=False, explore=False, return_all_q=False):
+    def forward(self, inps, act=None, agents=None, return_softmax_act=False, return_q=False, return_max_q=False,
+                explore=False, return_all_q=False, logger=None, niter=0):
         """
         Inputs:
             inps (list of PyTorch Matrices): Inputs to each agents' encoder
@@ -286,14 +287,18 @@ class Critic(nn.Module):
         # extract state encoding for each agent that we're returning Q for
         s_encodings = [self.state_encoders[a_i](states[a_i]) for a_i in agents]  # Xq: sa_enc.shape: nagents * bs * h_dim
 
-        gmf_L = (torch.stack(sa_encodings).permute(1, 2, 0)).mean(dim=2)
+        # gmf_L = (torch.stack(sa_encodings).permute(1, 2, 0)).mean(dim=2)
+        gmf_Ls = []
+        for i, a_i, selector in zip(range(len(agents)), agents, sa_encodings):
+            keys = [k for j, k in enumerate(sa_encodings) if j != a_i]  # keys.shape: (nagents-1) * bs * attend_dim
+            gmf_L = (torch.stack(keys).permute(1, 2, 0)).mean(dim=2)  # bs * attend_dim
+            gmf_Ls.append(gmf_L)
 
         # calculate Q per agent
         all_rets = []
         for i, a_i in enumerate(agents):
-
             agent_rets = []
-            critic_in = torch.cat((s_encodings[i], gmf_L), dim=1)
+            critic_in = torch.cat((s_encodings[i], gmf_Ls[i]), dim=1)
             all_q = self.critics[a_i](critic_in)
             max_q = all_q.max(dim=1, keepdim=True)[0]
             int_acs = actions[a_i].max(dim=1, keepdim=True)[1]

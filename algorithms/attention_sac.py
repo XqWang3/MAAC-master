@@ -4,6 +4,7 @@ from torch.optim import Adam
 from utils.misc import soft_update, hard_update, enable_gradients, disable_gradients
 from utils.agents import AttentionAgent
 from utils.critics import AttentionCritic
+from utils.critics import Critic
 
 MSELoss = torch.nn.MSELoss()
 
@@ -15,6 +16,7 @@ class AttentionSAC(object):
     def __init__(self, agent_init_params, sa_size,
                  gamma=0.95, tau=0.01, pi_lr=0.01, q_lr=0.01,
                  reward_scale=10.,
+                 uniform=0,
                  pol_hidden_dim=128,
                  critic_hidden_dim=128, attend_heads=4,
                  **kwargs):
@@ -35,15 +37,23 @@ class AttentionSAC(object):
             hidden_dim (int): Number of hidden dimensions for networks
         """
         self.nagents = len(sa_size)
-
+        self.uniform = uniform
         self.agents = [AttentionAgent(lr=pi_lr,
                                       hidden_dim=pol_hidden_dim,
                                       **params)
                          for params in agent_init_params]
-        self.critic = AttentionCritic(sa_size, hidden_dim=critic_hidden_dim,
-                                      attend_heads=attend_heads)
-        self.target_critic = AttentionCritic(sa_size, hidden_dim=critic_hidden_dim,
-                                             attend_heads=attend_heads)
+        if self.uniform == 0:
+            self.critic = AttentionCritic(sa_size, hidden_dim=critic_hidden_dim,
+                                          attend_heads=attend_heads)
+            self.target_critic = AttentionCritic(sa_size, hidden_dim=critic_hidden_dim,
+                                                 attend_heads=attend_heads)
+        elif self.uniform ==1:
+            self.critic = Critic(sa_size, hidden_dim=critic_hidden_dim,
+                                          attend_heads=attend_heads)
+            self.target_critic = Critic(sa_size, hidden_dim=critic_hidden_dim,
+                                                 attend_heads=attend_heads)
+        else:
+            raise 0
         hard_update(self.target_critic, self.critic)
         self.critic_optimizer = Adam(self.critic.parameters(), lr=q_lr,
                                      weight_decay=1e-3)
@@ -93,8 +103,14 @@ class AttentionSAC(object):
         trgt_critic_in = list(zip(next_obs, next_acs))
         critic_in = list(zip(obs, acs))
         next_qs = self.target_critic(trgt_critic_in, return_q=True)
-        critic_rets = self.critic(critic_in, regularize=True, return_q=True,
+        if self.uniform == 0:
+            critic_rets = self.critic(critic_in, regularize=True, return_q=True,
                                   logger=logger, niter=self.niter)
+        elif self.uniform == 1:
+            critic_rets = self.critic(critic_in, return_q=True, return_max_q=True,
+                                  logger=logger, niter=self.niter)  # return_max_q just as a placeholder
+        else:
+            raise 0
         q_loss = 0
         for a_i, nq, log_pi, (pq, regs) in zip(range(self.nagents), next_qs,
                                                next_log_pis, critic_rets):
@@ -106,12 +122,14 @@ class AttentionSAC(object):
             q_loss += MSELoss(pq, target_q.detach())
             if logger is not None:
                 logger.add_scalar('agent%i/q_loss_original' % a_i, q_loss, self.niter)
-            for reg in regs:
-                q_loss += reg  # regularizing attention
-            if logger is not None:
-                logger.add_scalar('agent%i/reg_atte' % a_i, reg, self.niter)
+            if self.uniform == 0:
+                for reg in regs:
+                    q_loss += reg  # regularizing attention
+                if logger is not None:
+                    logger.add_scalar('agent%i/reg_atte' % a_i, reg, self.niter)
         q_loss.backward()
-        self.critic.scale_shared_grads()
+        if self.uniform == 0:
+            self.critic.scale_shared_grads()
         grad_norm = torch.nn.utils.clip_grad_norm(
             self.critic.parameters(), 10 * self.nagents)
         self.critic_optimizer.step()
@@ -167,8 +185,8 @@ class AttentionSAC(object):
                 logger.add_scalar('agent%i/losses/pol_loss_original' % a_i, pol_loss, self.niter)
             for reg in pol_regs:
                 pol_loss += reg  # policy regularization
-            if logger is not None:
-                logger.add_scalar('agent%i/losses/pol_regs' % a_i, reg, self.niter)
+                if logger is not None:
+                    logger.add_scalar('agent%i/losses/pol_regs' % a_i, reg, self.niter)
             # don't want critic to accumulate gradients from policy loss
             disable_gradients(self.critic)
             pol_loss.backward()
@@ -249,7 +267,7 @@ class AttentionSAC(object):
     def init_from_env(cls, env, gamma=0.95, tau=0.01,
                       pi_lr=0.01, q_lr=0.01,
                       reward_scale=10.,
-                      pol_hidden_dim=128, critic_hidden_dim=128, attend_heads=4,
+                      pol_hidden_dim=128, critic_hidden_dim=128, attend_heads=4, uniform=0,
                       **kwargs):
         """
         Instantiate instance of this class from multi-agent environment
@@ -270,6 +288,7 @@ class AttentionSAC(object):
 
         init_dict = {'gamma': gamma, 'tau': tau,
                      'pi_lr': pi_lr, 'q_lr': q_lr,
+                     'uniform': uniform,
                      'reward_scale': reward_scale,
                      'pol_hidden_dim': pol_hidden_dim,
                      'critic_hidden_dim': critic_hidden_dim,
