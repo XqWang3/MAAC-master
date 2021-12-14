@@ -109,7 +109,7 @@ def run(config):
                 torch_agent_actions = model.step(torch_obs, torch_ac_, explore=True)
             elif config.model_name == 'Gmfq':
                 if ep_i==0:
-                    torch_ac_np_ = [np.zeros((config.n_rollout_threads, 5)) for i in range(model.nagents)]
+                    torch_ac_np_ = [np.zeros((config.n_rollout_threads, 5)) for _ in range(model.nagents)]
                 else:
                     torch_ac_np_ = agent_actions
                 torch_ac_ = [Variable(torch.Tensor(torch_ac_np_[i]), requires_grad=False) for i in range(model.nagents)]
