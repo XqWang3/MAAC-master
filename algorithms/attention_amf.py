@@ -106,10 +106,9 @@ class AttentionAMF(object):
         critic_rets = self.critic(critic_in, act=acs, return_softmax_act=True, return_q=True, regularize=True,
                                   regularize_pol=True, return_entropy=True, logger=logger, niter=self.niter)
 
-        # q_loss = 0
+        q_loss = 0
         # for a_i, (act_trgt, log_pi, probs, nq, all_q), (act, ent, pq, regs, reg_pol) in zip(range(self.nagents), all_trgt_rets, critic_rets):
         for a_i, nq, (act, ent, pq, regs, reg_pol) in zip(range(self.nagents), trgt_qs, critic_rets):
-            q_loss = 0
             target_q = (rews[a_i].view(-1, 1) + self.gamma * nq * (1 - dones[a_i].view(-1, 1)))
             # print(target_q.shape)  torch.Size([1024, 1])
             # v = (all_q * probs).sum(dim=1, keepdim=True)
@@ -128,19 +127,19 @@ class AttentionAMF(object):
                 # logger.add_scalar('agent%i/reg_pol' % a_i, reg_pol, self.niter)
                 logger.add_scalar('agent%i/policy_entropy' % a_i, ent, self.niter)
 
-            q_loss.backward()
-            # self.critic.scale_shared_grads()
-            grad_norm = torch.nn.utils.clip_grad_norm(
-                self.critic.parameters(), 10 * self.nagents)
-            self.critic_optimizer.step()
-            self.critic_optimizer.zero_grad()
+        q_loss.backward()
+        self.critic.scale_shared_grads()
+        grad_norm = torch.nn.utils.clip_grad_norm(
+            self.critic.parameters(), 10 * self.nagents)
+        self.critic_optimizer.step()
+        self.critic_optimizer.zero_grad()
 
-            if logger is not None:
-                logger.add_scalar('agent%i/losses/q_loss', a_i, q_loss, self.niter)
-                logger.add_scalar('agent%i/grad_norms/q', a_i, grad_norm, self.niter)
-        # if logger is not None:
-        #     logger.add_scalar('losses/q_loss', q_loss, self.niter)
-        #     logger.add_scalar('grad_norms/q', grad_norm, self.niter)
+            # if logger is not None:
+            #     logger.add_scalar('agent%i/losses/q_loss', a_i, q_loss, self.niter)
+            #     logger.add_scalar('agent%i/grad_norms/q', a_i, grad_norm, self.niter)
+        if logger is not None:
+            logger.add_scalar('losses/q_loss', q_loss, self.niter)
+            logger.add_scalar('grad_norms/q', grad_norm, self.niter)
         self.niter += 1
 
     # def update_policies(self, sample, soft=True, logger=None, **kwargs):
