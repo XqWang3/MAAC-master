@@ -97,7 +97,8 @@ class AttentionAMF(object):
         ##                                    return_log_pi=True, return_trgt_q=True, return_all_probs=True, return_all_q=True)
         # trgt_qs = self.target_critic(trgt_critic_in, return_max_q=True)
         all_trgt_q = self.target_critic(trgt_critic_in, return_all_q=True)
-        actions = self.critic(trgt_critic_in, return_softmax_act=True)
+        actions = self.critic(trgt_critic_in, return_softmax_act=True, explore=True)
+        # actions = self.critic(trgt_critic_in, return_softmax_act=True)
         trgt_qs=[]
         for a_i in range(self.nagents):
             int_acs = actions[a_i].max(dim=1, keepdim=True)[1]
