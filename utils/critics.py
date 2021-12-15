@@ -437,10 +437,10 @@ class AttentionIndepentCritic(nn.Module):
         return [sa_encoding, s_encoding]
 
     def attend_cal(self, a_i, sa_encodings, s_encodings, agents=None):
-        # if agents is None:
+        # if agents is None:key
         #     agents = range(len(self.critic_encoders))
-        all_head_keys = [[k_ext(enc) for enc in sa_encodings] for k_ext in self.key_extractors]
-        # all_head_keys = [[k_ext(enc) for enc in s_encodings] for k_ext in self.key_extractors]
+        # all_head_keys = [[k_ext(enc) for enc in sa_encodings] for k_ext in self.key_extractors]
+        all_head_keys = [[k_ext(enc) for enc in s_encodings] for k_ext in self.key_extractors]
         # Xq: all_head_keys.shape: heads * nagents * bs * attend_dim
         # extract sa values for each head for each agent
         all_head_values = [[v_ext(enc) for enc in sa_encodings] for v_ext in self.value_extractors]
