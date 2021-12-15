@@ -11,6 +11,7 @@ from utils.buffer import ReplayBuffer
 from utils.env_wrappers import SubprocVecEnv, DummyVecEnv
 from algorithms.attention_sac import AttentionSAC
 from algorithms.attention_amf import AttentionAMF
+from algorithms.attention_Iamf import AttentionIAMF
 from algorithms.gmf import GMF
 from algorithms.mf import MF
 
@@ -79,6 +80,16 @@ def run(config):
                                    critic_hidden_dim=config.critic_hidden_dim,
                                    attend_heads=config.attend_heads,
                                    reward_scale=config.reward_scale)
+    elif config.model_name=='Iamfq':
+        model = AttentionIAMF.init_from_env(env,
+                                           tau=config.tau,
+                                           pi_lr=config.pi_lr,
+                                           q_lr=config.q_lr,
+                                           gamma=config.gamma,
+                                           pol_hidden_dim=config.pol_hidden_dim,
+                                           critic_hidden_dim=config.critic_hidden_dim,
+                                           attend_heads=config.attend_heads,
+                                           reward_scale=config.reward_scale)
     else:
         raise "model initialize error!"
     replay_buffer = ReplayBuffer(config.buffer_length, model.nagents,
@@ -97,6 +108,8 @@ def run(config):
             torch_obs = [Variable(torch.Tensor(np.vstack(obs[:, i])),
                                   requires_grad=False)
                          for i in range(model.nagents)]
+            # for i in range(model.nagents):
+            #     print(torch_obs[i].shape)
             # get actions as torch Variables
             if config.model_name == 'maac':
                 torch_agent_actions = model.step(torch_obs, explore=True)
@@ -108,6 +121,13 @@ def run(config):
                 torch_ac_ = [Variable(torch.Tensor(torch_ac_np_[i]), requires_grad=False) for i in range(model.nagents)]
                 torch_agent_actions = model.step(torch_obs, torch_ac_, explore=True)
             elif config.model_name == 'Gmfq':
+                if ep_i==0:
+                    torch_ac_np_ = [np.zeros((config.n_rollout_threads, 5)) for _ in range(model.nagents)]
+                else:
+                    torch_ac_np_ = agent_actions
+                torch_ac_ = [Variable(torch.Tensor(torch_ac_np_[i]), requires_grad=False) for i in range(model.nagents)]
+                torch_agent_actions = model.step(torch_obs, torch_ac_, explore=True)
+            elif config.model_name == 'Iamfq':
                 if ep_i==0:
                     torch_ac_np_ = [np.zeros((config.n_rollout_threads, 5)) for _ in range(model.nagents)]
                 else:
