@@ -195,6 +195,10 @@ class AttentionCritic(nn.Module):
                 agent_rets.append(np.array(all_attend_probs[i]))
             if logger is not None:
                 logger.add_scalars('agent%i/attention' % a_i,
+                                   dict(('head%i_entropy' % h_i, weg) for h_i, weg
+                                        in enumerate(all_attend_probs[a_i])),
+                                   niter)
+                logger.add_scalars('agent%i/attention' % a_i,
                                    dict(('head%i_entropy' % h_i, ent) for h_i, ent
                                         in enumerate(head_entropies)),
                                    niter)

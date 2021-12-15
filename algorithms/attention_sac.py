@@ -48,6 +48,7 @@ class AttentionSAC(object):
             self.target_critic = AttentionCritic(sa_size, hidden_dim=critic_hidden_dim,
                                                  attend_heads=attend_heads)
         elif self.uniform ==1:
+            print('This is a Uniform MAAC version')
             self.critic = Critic(sa_size, hidden_dim=critic_hidden_dim,
                                           attend_heads=attend_heads)
             self.target_critic = Critic(sa_size, hidden_dim=critic_hidden_dim,

@@ -185,7 +185,7 @@ if __name__ == '__main__':
     parser.add_argument("--attend_heads", default=4, type=int)
     parser.add_argument("--pi_lr", default=0.001, type=float)
     parser.add_argument("--q_lr", default=0.001, type=float)
-    parser.add_argument("--tau", default=0.01, type=float)
+    parser.add_argument("--tau", default=0.001, type=float)
     parser.add_argument("--gamma", default=0.99, type=float)
     parser.add_argument("--reward_scale", default=100., type=float)
     parser.add_argument("--use_gpu", action='store_true')
