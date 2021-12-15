@@ -43,6 +43,7 @@ class AttentionSAC(object):
                                       **params)
                          for params in agent_init_params]
         if self.uniform == 0:
+            print('This is a MAAC version')
             self.critic = AttentionCritic(sa_size, hidden_dim=critic_hidden_dim,
                                           attend_heads=attend_heads)
             self.target_critic = AttentionCritic(sa_size, hidden_dim=critic_hidden_dim,

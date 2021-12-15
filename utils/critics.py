@@ -194,10 +194,21 @@ class AttentionCritic(nn.Module):
             if return_attend:
                 agent_rets.append(np.array(all_attend_probs[i]))
             if logger is not None:
+                # all_attend_probs[a_i].shape  head_num * bs * 1 * nagents-1
                 logger.add_scalars('agent%i/attention' % a_i,
-                                   dict(('head%i_entropy' % h_i, weg) for h_i, weg
-                                        in enumerate(all_attend_probs[a_i])),
+                                   dict(('head0_to_agent%i_weight' % h_i, weg) if h_i < a_i else
+                                        ('head0_to_agent%i_weight' % (h_i+1), weg) for h_i, weg
+                                        in enumerate(all_attend_probs[a_i][0][0].squeeze())),
                                    niter)
+                logger.add_scalars('agent%i/attention' % a_i,
+                                   dict(('head2_to_agent%i_weight' % h_i, weg) if h_i < a_i else
+                                        ('head2_to_agent%i_weight' % (h_i+1), weg) for h_i, weg
+                                        in enumerate(all_attend_probs[a_i][2][0].squeeze())),
+                                   niter)
+                logger.add_scalars('agent%i/attention' % a_i,
+                                   dict(('to_agent%i_head_mean_weight' % h_i, mean_weight) if h_i < a_i else
+                                        ('to_agent%i_head_mean_weight' % (h_i+1), mean_weight) for h_i, mean_weight
+                                        in enumerate(torch.stack(all_attend_probs[a_i]).mean(0)[0].squeeze())), niter)
                 logger.add_scalars('agent%i/attention' % a_i,
                                    dict(('head%i_entropy' % h_i, ent) for h_i, ent
                                         in enumerate(head_entropies)),
