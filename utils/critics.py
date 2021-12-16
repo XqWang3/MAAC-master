@@ -382,20 +382,22 @@ class AttentionIndepentCritic(nn.Module):
         if norm_in:
             self.encoder.add_module('enc_bn', nn.BatchNorm1d(idim, affine=False))
         self.encoder.add_module('enc_fc1', nn.Linear(idim, hidden_dim))
-        self.encoder.add_module('enc_nl', nn.LeakyReLU())
+        # self.encoder.add_module('enc_nl', nn.LeakyReLU())
         #self.critic_encoders.append(encoder)
 
         self.critic = nn.Sequential()
-        self.critic.add_module('critic_fc1', nn.Linear(2 * hidden_dim, hidden_dim))
-        self.critic.add_module('critic_nl', nn.LeakyReLU())
-        self.critic.add_module('critic_fc2', nn.Linear(hidden_dim, odim))
+        self.critic.add_module('critic_fc1', nn.Linear(2 * hidden_dim, 2 * hidden_dim))
+        self.critic.add_module('critic_nl1', nn.LeakyReLU())
+        self.critic.add_module('critic_fc2', nn.Linear(2 * hidden_dim, hidden_dim))
+        self.critic.add_module('critic_nl2', nn.LeakyReLU())
+        self.critic.add_module('critic_fc3', nn.Linear(hidden_dim, odim))
         #self.critics.append(critic)
 
         self.state_encoder = nn.Sequential()
         if norm_in:
             self.state_encoder.add_module('s_enc_bn', nn.BatchNorm1d(sdim, affine=False))
         self.state_encoder.add_module('s_enc_fc1', nn.Linear(sdim, hidden_dim))
-        self.state_encoder.add_module('s_enc_nl', nn.LeakyReLU())
+        # self.state_encoder.add_module('s_enc_nl', nn.LeakyReLU())
         #self.state_encoders.append(state_encoder)
 
         attend_dim = hidden_dim // attend_heads
@@ -440,7 +442,7 @@ class AttentionIndepentCritic(nn.Module):
         # if agents is None:key
         #     agents = range(len(self.critic_encoders))
         # all_head_keys = [[k_ext(enc) for enc in sa_encodings] for k_ext in self.key_extractors]
-        all_head_keys = [[k_ext(enc) for enc in s_encodings] for k_ext in self.key_extractors]
+        all_head_keys = [[k_ext(enc) for enc in sa_encodings] for k_ext in self.key_extractors]
         # Xq: all_head_keys.shape: heads * nagents * bs * attend_dim
         # extract sa values for each head for each agent
         all_head_values = [[v_ext(enc) for enc in sa_encodings] for v_ext in self.value_extractors]
@@ -605,20 +607,20 @@ class AttentionIndepentCritic(nn.Module):
             agent_rets.append(np.array(all_attend_probs[a_i]))
         if logger is not None:
             # all_attend_probs[a_i].shape  head_num * bs * 1 * nagents-1
-            logger.add_scalars('agent%i/attention' % a_i,
-                               dict(('head0_to_agent%i_weight' % h_i, weg) if h_i < a_i else
-                                    ('head0_to_agent%i_weight' % (h_i+1), weg) for h_i, weg
-                                    in enumerate(all_attend_probs[a_i][0][0].squeeze())),
-                               niter)
-            logger.add_scalars('agent%i/attention' % a_i,
-                               dict(('head2_to_agent%i_weight' % h_i, weg) if h_i < a_i else
-                                    ('head2_to_agent%i_weight' % (h_i+1), weg) for h_i, weg
-                                    in enumerate(all_attend_probs[a_i][2][0].squeeze())),
-                               niter)
-            logger.add_scalars('agent%i/attention' % a_i,
-                               dict(('to_agent%i_head_mean_weight' % h_i, mean_weight) if h_i < a_i else
-                                    ('to_agent%i_head_mean_weight' % (h_i+1), mean_weight) for h_i, mean_weight
-                                    in enumerate(torch.stack(all_attend_probs[a_i]).mean(0)[0].squeeze())), niter)
+            # logger.add_scalars('agent%i/attention' % a_i,
+            #                    dict(('head0_to_agent%i_weight' % h_i, weg) if h_i < a_i else
+            #                         ('head0_to_agent%i_weight' % (h_i+1), weg) for h_i, weg
+            #                         in enumerate(all_attend_probs[a_i][0][0].squeeze())),
+            #                    niter)
+            # logger.add_scalars('agent%i/attention' % a_i,
+            #                    dict(('head2_to_agent%i_weight' % h_i, weg) if h_i < a_i else
+            #                         ('head2_to_agent%i_weight' % (h_i+1), weg) for h_i, weg
+            #                         in enumerate(all_attend_probs[a_i][2][0].squeeze())),
+            #                    niter)
+            # logger.add_scalars('agent%i/attention' % a_i,
+            #                    dict(('to_agent%i_head_mean_weight' % h_i, mean_weight) if h_i < a_i else
+            #                         ('to_agent%i_head_mean_weight' % (h_i+1), mean_weight) for h_i, mean_weight
+            #                         in enumerate(torch.stack(all_attend_probs[a_i]).mean(0)[0].squeeze())), niter)
             logger.add_scalars('agent%i/attention' % a_i,
                                dict(('head%i_entropy' % h_i, ent) for h_i, ent
                                     in enumerate(head_entropies)),
