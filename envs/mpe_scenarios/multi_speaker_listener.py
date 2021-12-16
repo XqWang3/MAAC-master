@@ -8,9 +8,9 @@ class Scenario(BaseScenario):
         world = World()
         # set any world properties first
         world.dim_c = 5
-        num_listeners = 4
-        num_speakers = 4
-        num_landmarks = 6
+        num_listeners = 10
+        num_speakers = 10
+        num_landmarks = 12
         world.landmark_colors = np.array(
             sns.color_palette(n_colors=num_landmarks))
         world.listeners = []
@@ -20,7 +20,7 @@ class Scenario(BaseScenario):
             agent.name = 'agent %i' % agent.i
             agent.listener = True
             agent.collide = False
-            agent.size = 0.075
+            agent.size = 0.032
             agent.silent = True
             agent.accel = 1.5
             agent.initial_mass = 1.0
@@ -33,7 +33,7 @@ class Scenario(BaseScenario):
             agent.name = 'agent %i' % agent.i
             agent.listener = False
             agent.collide = False
-            agent.size = 0.075
+            agent.size = 0.032
             agent.movable = False
             agent.accel = 1.5
             agent.initial_mass = 1.0
@@ -47,7 +47,7 @@ class Scenario(BaseScenario):
             landmark.name = 'landmark %d' % i
             landmark.collide = False
             landmark.movable = False
-            landmark.size = 0.04
+            landmark.size = 0.02
             landmark.color = world.landmark_colors[i]
         # make initial conditions
         self.reset_world(world)
@@ -69,16 +69,16 @@ class Scenario(BaseScenario):
             speaker.goal_a = world.listeners[li]
             speaker.goal_b = np.random.choice(world.landmarks)
             speaker.color = np.array([0.25,0.25,0.25])
-            world.listeners[li].color = speaker.goal_b.color + np.array([0.25, 0.25, 0.25])
+            world.listeners[li].color = speaker.goal_b.color - np.array([0.25, 0.25, 0.25])
             world.listeners[li].speak_ind = i
 
         # set random initial states
         for agent in world.agents:
-            agent.state.p_pos = np.random.uniform(-1,+1, world.dim_p)
+            agent.state.p_pos = np.random.uniform(-0.95,+0.95, world.dim_p)
             agent.state.p_vel = np.zeros(world.dim_p)
             agent.state.c = np.zeros(world.dim_c)
         for i, landmark in enumerate(world.landmarks):
-            landmark.state.p_pos = np.random.uniform(-1,+1, world.dim_p)
+            landmark.state.p_pos = np.random.uniform(-0.95,+0.95, world.dim_p)
             landmark.state.p_vel = np.zeros(world.dim_p)
         self.reset_cached_rewards()
 
