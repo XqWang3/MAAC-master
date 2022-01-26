@@ -3,11 +3,11 @@ import torch.nn.functional as F
 from torch.optim import Adam
 from utils.misc import soft_update, hard_update, enable_gradients, disable_gradients
 from utils.agents import AttentionAgent
-from utils.critics import AttentionCritic
+from utils.critics import IQLCritic
 
 MSELoss = torch.nn.MSELoss()
 
-class AttentionAMF(object):
+class IQL(object):
     """
     Wrapper class for SAC agents with central attention critic in multi-agent
     task
@@ -40,9 +40,9 @@ class AttentionAMF(object):
         #                               hidden_dim=pol_hidden_dim,
         #                               **params)
         #                  for params in agent_init_params]
-        self.critic = AttentionCritic(sa_size, hidden_dim=critic_hidden_dim,
+        self.critic = IQLCritic(sa_size, hidden_dim=critic_hidden_dim,
                                       attend_heads=attend_heads)
-        self.target_critic = AttentionCritic(sa_size, hidden_dim=critic_hidden_dim,
+        self.target_critic = IQLCritic(sa_size, hidden_dim=critic_hidden_dim,
                                              attend_heads=attend_heads)
         hard_update(self.target_critic, self.critic)
         self.critic_optimizer = Adam(self.critic.parameters(), lr=q_lr,
@@ -59,14 +59,6 @@ class AttentionAMF(object):
         self.trgt_critic_dev = 'cpu'  # device for target critics
         self.niter = 0
 
-    # @property
-    # def policies(self):
-    #     return [a.policy for a in self.agents]
-
-    # @property
-    # def target_policies(self):
-    #     return [a.target_policy for a in self.agents]
-
     def step(self, observations, action_, explore=False):
         """
         Take a step forward in environment with all agents
@@ -76,7 +68,7 @@ class AttentionAMF(object):
             actions: List of actions for each agent
         """
         critic_in = list(zip(observations, action_))   # action_.shape (num_agent, threads, ac_dim)
-        critic_rets = self.critic(critic_in, return_softmax_act=True, return_q=False, explore=explore)
+        critic_rets = self.critic(critic_in, return_softmax_act=True, explore=explore)
         return critic_rets
 
     def update_critic(self, sample, soft=True, logger=None, **kwargs):
@@ -97,19 +89,18 @@ class AttentionAMF(object):
         ##                                    return_log_pi=True, return_trgt_q=True, return_all_probs=True, return_all_q=True)
         # trgt_qs = self.target_critic(trgt_critic_in, return_max_q=True)
         all_trgt_q = self.target_critic(trgt_critic_in, return_all_q=True)
-        actions = self.critic(trgt_critic_in, return_softmax_act=True, explore=True)
+        actions = self.critic(trgt_critic_in, return_softmax_act=True, explore=False)
         # actions = self.critic(trgt_critic_in, return_softmax_act=True)
         trgt_qs=[]
         for a_i in range(self.nagents):
             int_acs = actions[a_i].max(dim=1, keepdim=True)[1]
             trgt_q = all_trgt_q[a_i].gather(1, int_acs)
             trgt_qs.append(trgt_q)
-        critic_rets = self.critic(critic_in, act=acs, return_softmax_act=True, return_q=True, regularize=True,
-                                  regularize_pol=True, return_entropy=True, logger=logger, niter=self.niter)
+        critic_rets = self.critic(critic_in, act=acs, return_q=True, logger=logger, niter=self.niter)
 
         q_loss = 0
         # for a_i, (act_trgt, log_pi, probs, nq, all_q), (act, ent, pq, regs, reg_pol) in zip(range(self.nagents), all_trgt_rets, critic_rets):
-        for a_i, nq, (act, ent, pq, regs, reg_pol) in zip(range(self.nagents), trgt_qs, critic_rets):
+        for a_i, nq, pq in zip(range(self.nagents), trgt_qs, critic_rets):
             target_q = (rews[a_i].view(-1, 1) + self.gamma * nq * (1 - dones[a_i].view(-1, 1)))
             # print(target_q.shape)  torch.Size([1024, 1])
             # v = (all_q * probs).sum(dim=1, keepdim=True)
@@ -124,9 +115,9 @@ class AttentionAMF(object):
             # if logger is not None:
             #     logger.add_scalar('agent%i/reg_atte' % a_i, reg, self.niter)
             # q_loss += reg_pol
-            if logger is not None:
-                # logger.add_scalar('agent%i/reg_pol' % a_i, reg_pol, self.niter)
-                logger.add_scalar('agent%i/policy_entropy' % a_i, ent, self.niter)
+            # if logger is not None:
+            #     # logger.add_scalar('agent%i/reg_pol' % a_i, reg_pol, self.niter)
+            #     logger.add_scalar('agent%i/policy_entropy' % a_i, ent, self.niter)
 
         q_loss.backward()
         # self.critic.scale_shared_grads()

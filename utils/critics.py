@@ -5,7 +5,7 @@ import numpy as np
 from itertools import chain
 from utils.misc import onehot_from_logits, categorical_sample
 
-class AttentionCritic(nn.Module):
+class AttentionCritic(nn.Module): # for sac and amf
     """
     Attention network, used as critic for all agents. Each agent gets its own
     observation and action, and can also attend over the other agents' encoded
@@ -40,13 +40,17 @@ class AttentionCritic(nn.Module):
                 encoder.add_module('enc_bn', nn.BatchNorm1d(idim,
                                                             affine=False))
             encoder.add_module('enc_fc1', nn.Linear(idim, hidden_dim))
-            encoder.add_module('enc_nl', nn.LeakyReLU())
+            #encoder.add_module('enc_nl', nn.LeakyReLU())
             self.critic_encoders.append(encoder)
             critic = nn.Sequential()
             critic.add_module('critic_fc1', nn.Linear(2 * hidden_dim,
                                                       hidden_dim))
-            critic.add_module('critic_nl', nn.LeakyReLU())
-            critic.add_module('critic_fc2', nn.Linear(hidden_dim, odim))
+            # critic.add_module('critic_nl', nn.LeakyReLU())
+            # critic.add_module('critic_fc2', nn.Linear(hidden_dim, odim))
+            critic.add_module('critic_nl1', nn.LeakyReLU())
+            critic.add_module('critic_fc2', nn.Linear(hidden_dim, hidden_dim))
+            critic.add_module('critic_nl2', nn.LeakyReLU())
+            critic.add_module('critic_fc3', nn.Linear(hidden_dim, odim))
             self.critics.append(critic)
 
             state_encoder = nn.Sequential()
@@ -55,7 +59,7 @@ class AttentionCritic(nn.Module):
                                             sdim, affine=False))
             state_encoder.add_module('s_enc_fc1', nn.Linear(sdim,
                                                             hidden_dim))
-            state_encoder.add_module('s_enc_nl', nn.LeakyReLU())
+            # state_encoder.add_module('s_enc_nl', nn.LeakyReLU())
             self.state_encoders.append(state_encoder)
 
         attend_dim = hidden_dim // attend_heads
@@ -193,26 +197,26 @@ class AttentionCritic(nn.Module):
                 agent_rets.append(1e-3 * (all_q ** 2).mean())
             if return_attend:
                 agent_rets.append(np.array(all_attend_probs[i]))
-            if logger is not None:
-                # all_attend_probs[a_i].shape  head_num * bs * 1 * nagents-1
-                logger.add_scalars('agent%i/attention' % a_i,
-                                   dict(('head0_to_agent%i_weight' % h_i, weg) if h_i < a_i else
-                                        ('head0_to_agent%i_weight' % (h_i+1), weg) for h_i, weg
-                                        in enumerate(all_attend_probs[a_i][0][0].squeeze())),
-                                   niter)
-                logger.add_scalars('agent%i/attention' % a_i,
-                                   dict(('head2_to_agent%i_weight' % h_i, weg) if h_i < a_i else
-                                        ('head2_to_agent%i_weight' % (h_i+1), weg) for h_i, weg
-                                        in enumerate(all_attend_probs[a_i][2][0].squeeze())),
-                                   niter)
-                logger.add_scalars('agent%i/attention' % a_i,
-                                   dict(('to_agent%i_head_mean_weight' % h_i, mean_weight) if h_i < a_i else
-                                        ('to_agent%i_head_mean_weight' % (h_i+1), mean_weight) for h_i, mean_weight
-                                        in enumerate(torch.stack(all_attend_probs[a_i]).mean(0)[0].squeeze())), niter)
-                logger.add_scalars('agent%i/attention' % a_i,
-                                   dict(('head%i_entropy' % h_i, ent) for h_i, ent
-                                        in enumerate(head_entropies)),
-                                   niter)
+            # if logger is not None:
+            #     # all_attend_probs[a_i].shape  head_num * bs * 1 * nagents-1
+            #     logger.add_scalars('agent%i/attention' % a_i,
+            #                        dict(('head0_to_agent%i_weight' % h_i, weg) if h_i < a_i else
+            #                             ('head0_to_agent%i_weight' % (h_i+1), weg) for h_i, weg
+            #                             in enumerate(all_attend_probs[a_i][0][0].squeeze())),
+            #                        niter)
+            #     logger.add_scalars('agent%i/attention' % a_i,
+            #                        dict(('head2_to_agent%i_weight' % h_i, weg) if h_i < a_i else
+            #                             ('head2_to_agent%i_weight' % (h_i+1), weg) for h_i, weg
+            #                             in enumerate(all_attend_probs[a_i][2][0].squeeze())),
+            #                        niter)
+            #     logger.add_scalars('agent%i/attention' % a_i,
+            #                        dict(('to_agent%i_head_mean_weight' % h_i, mean_weight) if h_i < a_i else
+            #                             ('to_agent%i_head_mean_weight' % (h_i+1), mean_weight) for h_i, mean_weight
+            #                             in enumerate(torch.stack(all_attend_probs[a_i]).mean(0)[0].squeeze())), niter)
+            #     logger.add_scalars('agent%i/attention' % a_i,
+            #                        dict(('head%i_entropy' % h_i, ent) for h_i, ent
+            #                             in enumerate(head_entropies)),
+            #                        niter)
             if len(agent_rets) == 1:
                 all_rets.append(agent_rets[0])
             else:
@@ -223,7 +227,7 @@ class AttentionCritic(nn.Module):
             return all_rets
 
 
-class Critic(nn.Module):
+class Critic(nn.Module):  # for GMF
     """
     Attention network, used as critic for all agents. Each agent gets its own
     observation and action, and can also attend over the other agents' encoded
@@ -347,7 +351,132 @@ class Critic(nn.Module):
             return all_rets
 
 
-class AttentionIndepentCritic(nn.Module):
+class IQLCritic(nn.Module):  # for IQL
+    """
+    Attention network, used as critic for all agents. Each agent gets its own
+    observation and action, and can also attend over the other agents' encoded
+    observations and actions.
+    """
+    def __init__(self, sa_sizes, hidden_dim=32, norm_in=True, attend_heads=1):
+        """
+        Inputs:
+            sa_sizes (list of (int, int)): Size of state and action spaces per
+                                          agent
+            hidden_dim (int): Number of hidden dimensions
+            norm_in (bool): Whether to apply BatchNorm to input
+            attend_heads (int): Number of attention heads to use (use a number
+                                that hidden_dim is divisible by)
+        """
+        super(IQLCritic, self).__init__()
+        self.sa_sizes = sa_sizes
+        self.nagents = len(sa_sizes)
+
+        self.critic_encoders = nn.ModuleList()
+        self.critics = nn.ModuleList()
+
+        self.state_encoders = nn.ModuleList()
+        # iterate over agents
+        for sdim, adim in sa_sizes:
+            idim = sdim + adim
+            odim = adim
+            # encoder = nn.Sequential()
+            # if norm_in:
+            #     encoder.add_module('enc_bn', nn.BatchNorm1d(idim,
+            #                                                 affine=False))
+            # encoder.add_module('enc_fc1', nn.Linear(idim, hidden_dim))
+            # encoder.add_module('enc_nl', nn.LeakyReLU())
+            # self.critic_encoders.append(encoder)
+            critic = nn.Sequential()
+            critic.add_module('critic_fc1', nn.Linear(hidden_dim,
+                                                      2 * hidden_dim))
+            critic.add_module('critic_nl', nn.LeakyReLU())
+            critic.add_module('critic_fc2', nn.Linear(2*hidden_dim, odim))
+            self.critics.append(critic)
+
+            state_encoder = nn.Sequential()
+            if norm_in:
+                state_encoder.add_module('s_enc_bn', nn.BatchNorm1d(
+                                            sdim, affine=False))
+            state_encoder.add_module('s_enc_fc1', nn.Linear(sdim,
+                                                            hidden_dim))
+            state_encoder.add_module('s_enc_nl', nn.LeakyReLU())
+            self.state_encoders.append(state_encoder)
+
+
+    def forward(self, inps, act=None, agents=None, return_softmax_act=False, return_q=False, return_max_q=False,
+                explore=False, return_all_q=False, logger=None, niter=0):
+        """
+        Inputs:
+            inps (list of PyTorch Matrices): Inputs to each agents' encoder
+                                             (batch of obs + ac)
+            agents (int): indices of agents to return Q for
+            return_q (bool): return Q-value
+            return_all_q (bool): return Q-value for all actions
+            regularize (bool): returns values to add to loss function for
+                               regularization
+            return_attend (bool): return attention weights per agent
+            logger (TensorboardX SummaryWriter): If passed in, important values
+                                                 are logged
+        """
+        if agents is None:
+            agents = range(len(self.state_encoders))
+        states = [s for s, a in inps]    # Xq: obs.shape: nagents * bs * s_dim
+        actions = [a for s, a in inps]   # Xq:    .shape: nagents * bs * a_dim
+        if act is not None:
+            actions = act
+        # inps = [torch.cat((s, a), dim=1) for s, a in inps]
+        # extract state-action encoding for each agent
+        # sa_encodings = [encoder(inp) for encoder, inp in zip(self.critic_encoders, inps)] # Xq: sa_enc.shape: nagents * bs * h_dim
+        # extract state encoding for each agent that we're returning Q for
+        s_encodings = [self.state_encoders[a_i](states[a_i]) for a_i in agents]  # Xq: sa_enc.shape: nagents * bs * h_dim
+
+        # gmf_L = (torch.stack(sa_encodings).permute(1, 2, 0)).mean(dim=2)
+        # gmf_Ls = []
+        # for i, a_i, selector in zip(range(len(agents)), agents, sa_encodings):
+        #     keys = [k for j, k in enumerate(sa_encodings) if j != a_i]  # keys.shape: (nagents-1) * bs * attend_dim
+        #     gmf_L = (torch.stack(keys).permute(1, 2, 0)).mean(dim=2)  # bs * attend_dim
+        #     gmf_Ls.append(gmf_L)
+
+        # calculate Q per agent
+        all_rets = []
+        for i, a_i in enumerate(agents):
+            agent_rets = []
+            # critic_in = torch.cat((s_encodings[i], gmf_Ls[i]), dim=1)
+            critic_in = s_encodings[i]
+            all_q = self.critics[a_i](critic_in)
+            max_q = all_q.max(dim=1, keepdim=True)[0]
+            int_acs = actions[a_i].max(dim=1, keepdim=True)[1]
+            q = all_q.gather(1, int_acs)
+            if return_softmax_act:
+                probs = F.softmax(all_q, dim=1)
+                on_gpu = next(self.parameters()).is_cuda
+                if explore:
+                    int_act, act = categorical_sample(probs, use_cuda=on_gpu)
+                else:
+                    act = onehot_from_logits(probs)
+                agent_rets = [act]
+                # if return_log_pi or return_entropy:
+                #     log_probs = F.log_softmax(out, dim=1)
+                # if return_all_probs:
+                #     rets.append(probs)
+
+            if return_q:
+                agent_rets.append(q)
+            if return_max_q:
+                agent_rets.append(max_q)
+            if return_all_q:
+                agent_rets.append(all_q)
+            if len(agent_rets) == 1:
+                all_rets.append(agent_rets[0])
+            else:
+                all_rets.append(agent_rets)
+        if len(all_rets) == 1:
+            return all_rets[0]
+        else:
+            return all_rets
+
+
+class AttentionIndepentCritic(nn.Module):  # for Iamf
     """
     Attention network, used as critic for all agents. Each agent gets its own
     observation and action, and can also attend over the other agents' encoded
